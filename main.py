@@ -38,7 +38,7 @@ class Datahandler:
     def insert_users(self):
         """Insert all user into User table,
         assumes User table exists"""
-        all_users = self.all_users  # create tmp which can be modified
+        all_users = self.all_users.copy()  # create tmp which can be modified
 
         # insert all users with labels
         for user in self.labeled_users:
@@ -49,8 +49,8 @@ class Datahandler:
         for user in all_users:
             self.handler.insert_user(user, "FALSE")
 
-    def insert_activities(self):
-        tmp_all_users = self.all_users
+    def insert_activities_and_trackpoints(self):
+        tmp_all_users = self.all_users.copy()
         activity_count = 0  # activity count to keep track of activity id
 
         # if label starttime == .plt file name(starttime)
@@ -59,17 +59,115 @@ class Datahandler:
         # file read if first condition is false.)
         # use label(add transport information to activity)
 
-        # for user in self.labeled_users:
-        #     user_dir = Path(str(self.userpath) + rf"\{user}")
-        #     # deal with label stuff...
-        #     tmp_all_users.remove(user)
-        #     # TODO read all label entries, if label start and end time is found, add label
+        for user in self.labeled_users:
+            user_dir = Path(str(self.userpath) + rf"\{user}")
+            print(user)
+            print(f"{len(tmp_all_users)} len: {len(self.labeled_users)}")
+            tmp_all_users.remove(user)
 
-        #     # open labels, need to parse labels in a correct manner
-        #     f = open(Path(str(user_dir) + r"\labels.txt"), 'r')
-        #     data = f.read().splitlines()[1:]
-        #     for line in data:
-        #         print(line)
+            # trajectory files
+            traj_path = Path(str(user_dir) + r"\Trajectory")
+            files = os.listdir(traj_path)
+
+            # open labels
+            f = open(Path(str(user_dir) + r"\labels.txt"), 'r')
+            rawLabel = f.read().splitlines()[1:]
+
+            labelFormated = []
+
+            for line in rawLabel:
+                # format all label data to match dataset
+                list_line = list(line)  # turn str into list
+                list_line[10] = "_"
+                list_line[30] = "_"
+
+                line = "".join(list_line)  # add changes
+                line = line.split()
+
+                tmp = []
+                # replace characters with correct symbols
+                for i in line:
+                    val = i.replace("/", "-")
+                    val = val.replace("_", " ")
+                    tmp.append(val)
+
+                labelFormated.append(tmp)  # add formated label data
+
+            for label in labelFormated:
+                # look for matching label file
+                # (file name = YYYYMMDDHHMMSS.plt)
+                filename = label[0].replace(
+                    "-", "").replace(":", "").replace(" ", "") + ".plt"
+
+                transport = "NULL"
+
+                # check if filename exists
+                if filename in files:
+                    f = open(Path(str(traj_path) + rf"\{filename}"))
+                    trackRaw = f.read().splitlines()[6:]
+                    f.close()
+
+                    # if activity is to large, ignore it
+                    if len(trackRaw) > 2500:
+                        continue
+
+                    trackPoints = []
+
+                    # format each trackpoint and add all values to list
+                    for line in trackRaw:
+                        formated = line.replace(",", " ").split()
+                        # change date and time format to match datetime
+                        formated[5] = f"{formated[5]} {formated[6]}"
+                        formated.remove(formated[-1])  # remove time
+
+                        trackPoints.append(formated)
+                    # file exists, check if endtime is correct
+
+                    # fetch datetime from last line
+                    endDate = trackRaw[-1].replace(",", " ").split()
+                    endDate = f"{endDate[5]} {endDate[6]}"
+
+                    # check if label match
+                    if endDate == label[1]:
+                        transport = label[2]
+
+                    # add activity
+                    self.handler.insert_activity(
+                        name=user, transportationMode=transport, startDatetime=trackPoints[0][5], endDatetime=trackPoints[-1][5])
+                    activity_count += 1
+
+                    # add all trajectories for given activity
+                    self.handler.insert_trackpoints(
+                        activity_count, trackPoints)
+
+            for file in files:
+                f = open(Path(str(traj_path) + rf"\{file}"))
+                trackRaw = f.read().splitlines()[6:]
+                f.close()
+
+                # if activity is to large, ignore it
+                if len(trackRaw) > 2500:
+                    continue
+
+                trackPoints = []
+
+                # format each trackpoint and add all values to list
+                for line in trackRaw:
+                    formated = line.replace(",", " ").split()
+                    # change date and time format to match datetime
+                    formated[5] = f"{formated[5]} {formated[6]}"
+                    formated.remove(formated[-1])  # remove time
+
+                    trackPoints.append(formated)
+
+                # add activity
+                self.handler.insert_activity(
+                    name=user, transportationMode=transport, startDatetime=trackPoints[0][5], endDatetime=trackPoints[-1][5])
+                activity_count += 1
+
+                # add all trajectories for given activity
+                self.handler.insert_trackpoints(
+                    activity_count, trackPoints)
 
         # for each user:
         for user in tmp_all_users:
@@ -81,33 +179,33 @@ class Datahandler:
 
             for file in files:
                 f = open(Path(str(traj_path) + rf"\{file}"))
-                traj_raw = f.read().splitlines()[6:]
+                trackRaw = f.read().splitlines()[6:]
                 f.close()
 
                 # if activity is to large, ignore it
-                if len(traj_raw) > 2500:
+                if len(trackRaw) > 2500:
                     continue
 
-                trajectories = []
+                trackPoints = []
                 # format each trajectory and add all values to list
-                for line in traj_raw:
+                for line in trackRaw:
                     formated = line.replace(",", " ").split()
                     # change date and time format to match datetime
                     formated[5] = f"{formated[5]} {formated[6]}"
                     formated.remove(formated[-1])  # remove time
 
-                    trajectories.append(formated)
+                    trackPoints.append(formated)
 
                 # add activity
                 self.handler.insert_activity(
-                    name=user, transportationMode="NULL", startDatetime=trajectories[0][5], endDatetime=trajectories[-1][5])
+                    name=user, transportationMode="NULL", startDatetime=trackPoints[0][5], endDatetime=trackPoints[-1][5])
                 activity_count += 1
 
                 # add all trajectories for given activity
                 # for traj in trajectories:
                 #     self.handler.insert_trackpoint(
                 #         activityID=activity_count, lat=traj[0], lon=traj[1], altitude=traj[3], date_time=traj[5])
-                self.handler.insert_trackpoints(activity_count, trajectories)
+                self.handler.insert_trackpoints(activity_count, trackPoints)
                 self.handler.print_table("TrackPoint")
                 self.drop_tables()
                 exit(0)
@@ -251,4 +349,4 @@ if __name__ == '__main__':
     data.drop_tables()  # make sure db is clean
     data.create_tables()
     data.insert_users()
-    data.insert_activities()
+    data.insert_activities_and_trackpoints()
