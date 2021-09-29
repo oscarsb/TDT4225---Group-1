@@ -1,9 +1,9 @@
-from main import ExampleProgram
+from main import DBhandler, Datahandler
 
 
-class Test():
+class DBhandler_Test:
     def __init__(self):
-        self.program = ExampleProgram()
+        self.program = DBhandler()
 
     def _test_setup(self):
         self.program.create_user_table()
@@ -42,7 +42,24 @@ class Test():
         self._print_tables()
         self._remove_tables()
 
-
+class Datahandler_Test:
+    def __init__(self):
+        self.program = Datahandler()
+    
+    def test_insert_userdata(self):
+        """Test inserting user"""
+        self.program.drop_tables()
+        self.program.create_tables()
+        self.program.insert_users()
+        self.program.handler.print_table("User")
+        self.program.drop_tables()
+    
 if __name__ == "__main__":
-    test = Test()
-    test.basic_test()
+    #dbhandler test
+    DBtest = DBhandler_Test()
+    DBtest.basic_test()
+    
+    #Datahandler test
+    DATAtest = Datahandler_Test()
+    DATAtest.test_insert_userdata()
+    
