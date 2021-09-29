@@ -14,6 +14,7 @@ class Datahandler:
         self.handler = DBhandler()
         self.datapath = Path(config("DATA_PATH"))
         self.userpath = Path(str(self.datapath) + r"\Data")
+        self.all_users = os.listdir(self.userpath) # all users in dataset
         self.tables = ["TrackPoint","Activity","User"]
     
     def create_tables(self):
@@ -30,10 +31,11 @@ class Datahandler:
     def insert_users(self):
         """Insert all user into User table,
         assumes User table exists"""
-        all_users = os.listdir(self.userpath) # all users in dataset
+        all_users = self.all_users # create tmp which can be modified
         
-        f = open(Path(str(self.datapath) + "/labeled_ids.txt"), 'r') # get users with labels
+        f = open(Path(str(self.datapath) + r"\labeled_ids.txt"), 'r') # get users with labels
         labeled_users = f.read().splitlines()
+        f.close()
         
         #insert all users with labels
         for user in labeled_users:
@@ -43,7 +45,34 @@ class Datahandler:
         #insert users without labels
         for user in all_users:
             self.handler.insert_user(user, "FALSE")
-        
+    
+    def insert_activities(self):
+        # for each user:
+        for user in self.all_users:
+            user_dir = Path(str(self.userpath) + rf"\{user}")
+            print(user_dir)
+
+            try:
+                f = open(Path(str(user_dir) + r"\labeled_ids.txt"), 'r')
+                labels = f.read().splitlines()
+                f.close()
+            except:
+                labels = None
+                
+            exit(0)
+            # for each trajectory file:
+                # if num_lines > 2506:
+                    # drop file -> break
+                #add activity and then trajectories
+                
+                # if label starttime == .plt file name(starttime) 
+                    # if endtime in .plt file match givel label end time: 
+                    # (second if test instead of AND operator to avoid unnecesary
+                    # file read if first condition is false.)
+                        # use label(add transport information to activity)
+                        
+                # had to read trajectory file, might as well insert all trajectories while it's in memory
+
 
 class DBhandler:
     def __init__(self):
@@ -166,4 +195,5 @@ class DBhandler:
 
 
 if __name__ == '__main__':
-    pass
+    data = Datahandler()
+    data.insert_activities()
