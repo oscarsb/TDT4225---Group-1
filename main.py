@@ -14,64 +14,103 @@ class Datahandler:
         self.handler = DBhandler()
         self.datapath = Path(config("DATA_PATH"))
         self.userpath = Path(str(self.datapath) + r"\Data")
-        self.all_users = os.listdir(self.userpath) # all users in dataset
-        self.tables = ["TrackPoint","Activity","User"]
-    
+
+        self.all_users = os.listdir(self.userpath)  # all users in dataset
+
+        # get users with labels, TODO startup function
+        f = open(Path(str(self.datapath) + r"\labeled_ids.txt"), 'r')
+        self.labeled_users = f.read().splitlines()  # all users with labels
+        f.close()
+
+        self.tables = ["TrackPoint", "Activity", "User"]
+
     def create_tables(self):
         """Creates User, Activity and TrackPoint tables"""
         self.handler.create_user_table()
         self.handler.create_activity_table()
         self.handler.create_trackpoint_table()
-        
+
     def drop_tables(self):
         """Drop all tables"""
         for table in self.tables:
             self.handler.drop_table(table)
-    
+
     def insert_users(self):
         """Insert all user into User table,
         assumes User table exists"""
-        all_users = self.all_users # create tmp which can be modified
-        
-        f = open(Path(str(self.datapath) + r"\labeled_ids.txt"), 'r') # get users with labels
-        labeled_users = f.read().splitlines()
-        f.close()
-        
-        #insert all users with labels
-        for user in labeled_users:
+        all_users = self.all_users  # create tmp which can be modified
+
+        # insert all users with labels
+        for user in self.labeled_users:
             all_users.remove(user)
             self.handler.insert_user(user, "TRUE")
-        
-        #insert users without labels
+
+        # insert users without labels
         for user in all_users:
             self.handler.insert_user(user, "FALSE")
-    
-    def insert_activities(self):
-        # for each user:
-        for user in self.all_users:
-            user_dir = Path(str(self.userpath) + rf"\{user}")
-            print(user_dir)
 
-            try:
-                f = open(Path(str(user_dir) + r"\labeled_ids.txt"), 'r')
-                labels = f.read().splitlines()
+    def insert_activities(self):
+        tmp_all_users = self.all_users
+        activity_count = 0  # activity count to keep track of activity id
+
+        # if label starttime == .plt file name(starttime)
+        # if endtime in .plt file match givel label end time:
+        # (second if test instead of AND operator to avoid unnecesary
+        # file read if first condition is false.)
+        # use label(add transport information to activity)
+
+        # for user in self.labeled_users:
+        #     user_dir = Path(str(self.userpath) + rf"\{user}")
+        #     # deal with label stuff...
+        #     tmp_all_users.remove(user)
+        #     # TODO read all label entries, if label start and end time is found, add label
+
+        #     # open labels, need to parse labels in a correct manner
+        #     f = open(Path(str(user_dir) + r"\labels.txt"), 'r')
+        #     data = f.read().splitlines()[1:]
+        #     for line in data:
+        #         print(line)
+
+        # for each user:
+        for user in tmp_all_users:
+            user_dir = Path(str(self.userpath) + rf"\{user}")
+
+            # go through all of the user's activeties/trajectories
+            traj_path = Path(str(user_dir) + r"\Trajectory")
+            files = os.listdir(traj_path)
+
+            for file in files:
+                f = open(Path(str(traj_path) + rf"\{file}"))
+                traj_raw = f.read().splitlines()[6:]
                 f.close()
-            except:
-                labels = None
-                
-            exit(0)
-            # for each trajectory file:
-                # if num_lines > 2506:
-                    # drop file -> break
-                #add activity and then trajectories
-                
-                # if label starttime == .plt file name(starttime) 
-                    # if endtime in .plt file match givel label end time: 
-                    # (second if test instead of AND operator to avoid unnecesary
-                    # file read if first condition is false.)
-                        # use label(add transport information to activity)
-                        
-                # had to read trajectory file, might as well insert all trajectories while it's in memory
+
+                # if activity is to large, ignore it
+                if len(traj_raw) > 2500:
+                    continue
+
+                trajectories = []
+                # format each trajectory and add all values to list
+                for line in traj_raw:
+                    formated = line.replace(",", " ").split()
+                    # change date and time format to match datetime
+                    formated[5] = f"{formated[5]} {formated[6]}"
+                    formated.remove(formated[-1])  # remove time
+
+                    trajectories.append(formated)
+
+                # add activity
+                self.handler.insert_activity(
+                    name=user, transportationMode="NULL", startDatetime=trajectories[0][5], endDatetime=trajectories[-1][5])
+                activity_count += 1
+
+                # add all trajectories for given activity
+                # for traj in trajectories:
+                #     self.handler.insert_trackpoint(
+                #         activityID=activity_count, lat=traj[0], lon=traj[1], altitude=traj[3], date_time=traj[5])
+                self.handler.insert_trackpoints(activity_count, trajectories)
+                self.handler.print_table("TrackPoint")
+                self.drop_tables()
+                exit(0)
 
 
 class DBhandler:
@@ -89,7 +128,7 @@ class DBhandler:
         self.cursor.execute("SHOW TABLES")
         rows = self.cursor.fetchall()
         print(tabulate(rows, headers=self.cursor.column_names))
-    
+
     def print_table(self, table_name):
         self.cursor.execute(f"SELECT * FROM {table_name}")
         rows = self.cursor.fetchall()
@@ -103,7 +142,6 @@ class DBhandler:
                     )
                     """
 
-        # Add table to database
         self.cursor.execute(query)
         self.db_connection.commit()
 
@@ -126,22 +164,20 @@ class DBhandler:
     def create_trackpoint_table(self):
         """Create the user table"""
         # TODO how big should decimal's be?
-        total_numbers = 10 #total nr. of numbers in latitude
-        decimal_len = 5 # total nr. of decimals in latitude
-        
+        total_numbers = 20  # total nr. of numbers in latitude
+        decimal_len = 10  # total nr. of decimals in latitude
+
         query = f"""CREATE TABLE IF NOT EXISTS TrackPoint (
                     trackPointID INT AUTO_INCREMENT NOT NULL PRIMARY KEY,
                     activityID INT NOT NULL,
                     lat DOUBLE({total_numbers},{decimal_len}),
                     lon DOUBLE({total_numbers},{decimal_len}),
                     altitude INT,
-                    dateDays DOUBLE({total_numbers},{decimal_len}),
                     date_time DATETIME,
                     CONSTRAINT fk_activity FOREIGN KEY (activityID)
                     REFERENCES Activity(activityID))
                     """
 
-        # Add table to database
         self.cursor.execute(query)
         self.db_connection.commit()
 
@@ -164,36 +200,55 @@ class DBhandler:
         transportationMode should be string,
         startDatetime should be Datetime,
         endDatetime should be Datetime
-        
+
         Datetime should have format:  "YYYY-MM-DD HH:MM:SS"
         """
 
         query = f"""INSERT INTO Activity(userID, transportationMode, startDatetime, endDatetime) 
                     VALUES('{name}', '{transportationMode}', '{startDatetime}', '{endDatetime}')"""
 
-        # This adds table_name to the %s variable and executes the query
         self.cursor.execute(query)
         self.db_connection.commit()
-    
-    def insert_trackpoint(self, activityID, lat, lon, altitude, dateDays, date_time):
-        """insert new activity, 
+
+    def insert_trackpoint(self, activityID, lat, lon, altitude, date_time):
+        """insert new single trackpoint, 
         activityID
         lat (double)
         lon (double)
         altitude (int)
-        dateDays (double)
         date_time (datetime)
         """
 
-        query = f"""INSERT INTO TrackPoint(activityID, lat, lon, altitude, dateDays, date_time) 
-                    VALUES({activityID}, {lat}, {lon}, {altitude}, {dateDays}, '{date_time}')"""
+        query = f"""INSERT INTO TrackPoint(activityID, lat, lon, altitude, date_time) 
+                    VALUES({activityID}, {lat}, {lon}, {altitude}, '{date_time}')"""
 
-        # This adds table_name to the %s variable and executes the query
+        self.cursor.execute(query)
+        self.db_connection.commit()
+
+    def insert_trackpoints(self, activityID, trackList):
+        """insert multiple trackpoints, with 
+        activityID (foreign activity id)
+        tracklist (list on format: [lat, lon, 0, altitude, date_days, date_time)]
+        """
+        query = f"""INSERT INTO TrackPoint(activityID, lat, lon, altitude, date_time) 
+                    VALUES"""
+
+        # insert all trackPoints into query
+        for track in trackList:
+            value = f"({activityID},{track[0]}, {track[1]}, {track[3]}, '{track[5]}')"
+            if track != trackList[-1]:
+                value = value + ","
+
+            query = query + value
+
+        # execute query
         self.cursor.execute(query)
         self.db_connection.commit()
 
 
-
 if __name__ == '__main__':
     data = Datahandler()
+    data.drop_tables()  # make sure db is clean
+    data.create_tables()
+    data.insert_users()
     data.insert_activities()
