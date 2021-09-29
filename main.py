@@ -1,10 +1,51 @@
+import os
 from DbConnector import DbConnector
 from tabulate import tabulate
+from decouple import config
 # from datetime import datetime
 
+from pathlib import Path
 
-class ExampleProgram:
+dataFolder = Path(r'D:\Desktop dump\example.txt')
 
+
+class Datahandler:
+    def __init__(self):
+        self.handler = DBhandler()
+        self.datapath = Path(config("DATA_PATH"))
+        self.userpath = Path(str(self.datapath) + r"\Data")
+        self.tables = ["TrackPoint","Activity","User"]
+    
+    def create_tables(self):
+        """Creates User, Activity and TrackPoint tables"""
+        self.handler.create_user_table()
+        self.handler.create_activity_table()
+        self.handler.create_trackpoint_table()
+        
+    def drop_tables(self):
+        """Drop all tables"""
+        for table in self.tables:
+            self.handler.drop_table(table)
+    
+    def insert_users(self):
+        """Insert all user into User table,
+        assumes User table exists"""
+        all_users = os.listdir(self.userpath) # all users in dataset
+        
+        f = open(Path(str(self.datapath) + "/labeled_ids.txt"), 'r') # get users with labels
+        labeled_users = f.read().splitlines()
+        
+        #insert all users with labels
+        for user in labeled_users:
+            all_users.remove(user)
+            self.handler.insert_user(user, "TRUE")
+        
+        #insert users without labels
+        for user in all_users:
+            self.handler.insert_user(user, "FALSE")
+        
+
+class DBhandler:
     def __init__(self):
         self.connection = DbConnector()
         self.db_connection = self.connection.db_connection
@@ -123,34 +164,6 @@ class ExampleProgram:
         self.db_connection.commit()
 
 
-def main():
-    program = None
-
-    program = ExampleProgram()
-
-    # remove data incase error previous iteration
-    program.drop_table("Activity")
-    program.drop_table("User")
-
-    program.create_user_table(table_name="User")
-    program.create_activity_table(table_name="Activity")
-
-    program.insert_user('Hans', "TRUE")
-    program.insert_activity("Hans", "Pizza")
-
-    # program.show_tables()
-    program.fetch_data("User")
-    program.fetch_data("Activity")
-
-    program.drop_table("Activity")
-    program.drop_table("User")
-
-    # program.create_table(table_name="TrackPoint")
-
-    # exit
-    if program:
-        program.connection.close_connection()
-
 
 if __name__ == '__main__':
-    main()
+    pass
