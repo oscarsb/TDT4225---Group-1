@@ -7,8 +7,6 @@ from tabulate import tabulate
 from decouple import config
 from DbConnector import DbConnector
 
-dataFolder = Path(r'D:\Desktop dump\example.txt')
-
 
 class Datahandler:
     """Class for parsing Geolife data"""
