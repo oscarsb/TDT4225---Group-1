@@ -1,6 +1,6 @@
 """Datahandler and DBhandler classes
 for connecting to MySQL server and
-inserting Geolife dataset."""
+inserting Geolife dataset. (Part 1)"""
 import os
 from pathlib import Path
 from tabulate import tabulate
@@ -277,16 +277,15 @@ class DBhandler:
     def db_close_connection(self):
         """Close the database connection"""
         if self.connection:
-            self.connection.connection.close_connection()
+            self.connection.close_connection()
 
 
 if __name__ == '__main__':
     """Insert all data in database
     OBS: drops existing tables!"""
-    data = Datahandler()
-    data.drop_tables()  # make sure db is clean
-    data.create_tables()
-    data.insert_users()
-    data.insert_activities_and_trackpoints()
-    data.db_close_connection()
-    print("All data is added to database.")
+    # data = Datahandler()
+    # data.drop_tables()  # make sure db is clean
+    # data.create_tables()
+    # data.insert_users()
+    # data.insert_activities_and_trackpoints()
+    # data.db_close_connection()
