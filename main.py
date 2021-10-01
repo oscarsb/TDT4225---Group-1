@@ -82,7 +82,6 @@ class Datahandler:
 
         activity_count = 0  # activity count to keep track of activity id
 
-        # rewrite:
         for user in self.all_users:
             # data directory of given user
             user_dir = Path(str(self.userpath) + rf"\{user}")
@@ -283,6 +282,7 @@ class DBhandler:
 if __name__ == '__main__':
     """Insert all data in database
     OBS: drops existing tables!"""
+    pass
     # data = Datahandler()
     # data.drop_tables()  # make sure db is clean
     # data.create_tables()
