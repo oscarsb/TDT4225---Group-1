@@ -7,13 +7,15 @@ from tabulate import tabulate
 from decouple import config
 from DbConnector import DbConnector
 
+import constants
+
 
 class Datahandler:
     """Class for parsing Geolife data"""
 
     def __init__(self):
         self.handler = DBhandler()
-        self.datapath = Path(config("DATA_PATH"))
+        self.datapath = Path(constants.DATA_PATH)
         self.userpath = Path(str(self.datapath) + r"\Data")
         self.all_users = os.listdir(self.userpath)  # all users in dataset
 
@@ -277,11 +279,12 @@ class DBhandler:
         """Close the database connection"""
         if self.connection:
             self.connection.close_connection()
-
-
+    
 if __name__ == '__main__':
     """Insert all data in database
     OBS: drops existing tables!"""
+    data = Datahandler()
+    data.testPath()
     pass
     # data = Datahandler()
     # data.drop_tables()  # make sure db is clean
