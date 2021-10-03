@@ -164,8 +164,8 @@ class DBhandler:
     def create_user_table(self):
         """Create the user table"""
         query = """CREATE TABLE IF NOT EXISTS User (
-                    userID varchar(25) NOT NULL PRIMARY KEY UNIQUE,
-                    hasLabels BOOLEAN
+                    id varchar(25) NOT NULL PRIMARY KEY UNIQUE,
+                    has_labels BOOLEAN
                     )
                     """
 
@@ -175,13 +175,13 @@ class DBhandler:
     def create_activity_table(self):
         """Create the activity table"""
         query = """CREATE TABLE IF NOT EXISTS Activity (
-                    activityID INT AUTO_INCREMENT NOT NULL PRIMARY KEY,
-                    userID varchar(25) NOT NULL,
-                    transportationMode varchar(25),
-                    startDatetime DATETIME,
-                    endDatetime DATETIME,
-                    CONSTRAINT fk_user FOREIGN KEY (userID)
-                    REFERENCES User(userID))
+                    id INT AUTO_INCREMENT NOT NULL PRIMARY KEY,
+                    user_id varchar(25) NOT NULL,
+                    transportation_mode varchar(25),
+                    start_date_time DATETIME,
+                    end_date_time DATETIME,
+                    CONSTRAINT fk_user FOREIGN KEY (user_id)
+                    REFERENCES User(id))
                     """
 
         # Add table to database
@@ -195,14 +195,14 @@ class DBhandler:
         decimal_len = 10  # total nr. of decimals in latitude
 
         query = f"""CREATE TABLE IF NOT EXISTS TrackPoint (
-                    trackPointID INT AUTO_INCREMENT NOT NULL PRIMARY KEY,
-                    activityID INT NOT NULL,
+                    id INT AUTO_INCREMENT NOT NULL PRIMARY KEY,
+                    activity_id INT NOT NULL,
                     lat DOUBLE({total_numbers},{decimal_len}),
                     lon DOUBLE({total_numbers},{decimal_len}),
                     altitude INT,
                     date_time DATETIME,
-                    CONSTRAINT fk_activity FOREIGN KEY (activityID)
-                    REFERENCES Activity(activityID))
+                    CONSTRAINT fk_activity FOREIGN KEY (activity_id)
+                    REFERENCES Activity(id))
                     """
 
         self.cursor.execute(query)
@@ -214,7 +214,7 @@ class DBhandler:
         has_lables should be "TRUE" or "FALSE"
         """
 
-        query = f"""INSERT INTO User (userID, hasLabels)
+        query = f"""INSERT INTO User (id, has_labels)
                     VALUES('{name}', {has_labels})"""
 
         # This adds table_name to the %s variable and executes the query
@@ -223,15 +223,15 @@ class DBhandler:
 
     def insert_activity(self, name, transportationMode, startDatetime, endDatetime):
         """insert new activity,
-        name should be a userID,
-        transportationMode should be string,
-        startDatetime should be Datetime,
+        name should be a id,
+        transportation_mode should be string,
+        start_date_time should be Datetime,
         endDatetime should be Datetime
 
         Datetime should have format:  "YYYY-MM-DD HH:MM:SS"
         """
 
-        query = f"""INSERT INTO Activity(userID, transportationMode, startDatetime, endDatetime)
+        query = f"""INSERT INTO Activity(user_id, transportation_mode, start_date_time, end_date_time)
                     VALUES('{name}', '{transportationMode}', '{startDatetime}', '{endDatetime}')"""
 
         self.cursor.execute(query)
@@ -239,14 +239,14 @@ class DBhandler:
 
     def insert_trackpoint(self, activityID, lat, lon, altitude, date_time):
         """insert new single trackpoint,
-        activityID
+        id
         lat (double)
         lon (double)
         altitude (int)
         date_time (datetime)
         """
 
-        query = f"""INSERT INTO TrackPoint(activityID, lat, lon, altitude, date_time)
+        query = f"""INSERT INTO TrackPoint(activity_id, lat, lon, altitude, date_time)
                     VALUES({activityID}, {lat}, {lon}, {altitude}, '{date_time}')"""
 
         self.cursor.execute(query)
@@ -254,10 +254,10 @@ class DBhandler:
 
     def insert_trackpoints(self, activityID, track_list):
         """insert multiple trackpoints, with
-        activityID (foreign activity id)
+        id (foreign activity id)
         tracklist (list on format: [lat, lon, 0, altitude, date_days, date_time)]
         """
-        query = """INSERT INTO TrackPoint(activityID, lat, lon, altitude, date_time)
+        query = """INSERT INTO TrackPoint(activity_id, lat, lon, altitude, date_time)
                     VALUES"""
 
         # insert all trackPoints into query
@@ -284,11 +284,10 @@ if __name__ == '__main__':
     """Insert all data in database
     OBS: drops existing tables!"""
     data = Datahandler()
-    data.testPath()
-    pass
     # data = Datahandler()
-    # data.drop_tables()  # make sure db is clean
-    # data.create_tables()
-    # data.insert_users()
-    # data.insert_activities_and_trackpoints()
-    # data.db_close_connection()
+    #data.drop_tables()  # make sure db is clean
+    #data.create_tables()
+    #data.insert_users()
+    #data.insert_activities_and_trackpoints()
+    data.db_close_connection()
+    pass
