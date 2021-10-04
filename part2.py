@@ -6,6 +6,7 @@ from pathlib import Path
 from tabulate import tabulate
 from decouple import config
 from DbConnector import DbConnector
+from haversine import haversine, Unit
 
 import constants
 
@@ -78,7 +79,28 @@ class DBhandler:
         num_has_label_but_never_taken_taxi = self.cursor.fetchone()[0]
         return num_no_label+num_has_label_but_never_taken_taxi
         
-    
+    def count_users_per_transport_mode(self):
+        self.cursor.execute("SELECT a.transportation_mode, COUNT(DISTINCT(u.id)) FROM Activity as a JOIN User as u ON a.user_id = u.id WHERE NOT transportation_mode = 'NULL' GROUP BY a.transportation_mode")
+        return self.cursor.fetchall()
+
+    def find_date_with_most_activities(self):
+        self.cursor.execute("SELECT YEAR(start_date_time), MONTH(start_date_time) FROM Activity GROUP BY YEAR(start_date_time), MONTH(start_date_time) ORDER by COUNT(id) DESC LIMIT 1")
+        return self.cursor.fetchone()
+
+    def find_user_with_most_activities(self):
+        year, month = self.find_date_with_most_activities()
+        self.cursor.execute(f"SELECT u.id, COUNT(a.id), SUM(TIMESTAMPDIFF(HOUR, a.start_date_time, a.end_date_time)) FROM Activity as a JOIN User as u WHERE a.user_id = u.id AND YEAR(a.start_date_time) = {year} AND MONTH(a.start_date_time) = {month} GROUP BY u.id ORDER BY COUNT(a.id) DESC LIMIT 2")
+        return self.cursor.fetchall()
+
+    def find_distance_walked_in_year_by_user(self, year, user_id):
+        self.cursor.execute(f"SELECT t.lat, t.lon FROM TrackPoint as t INNER JOIN (SELECT * FROM Activity as a INNER JOIN (SELECT id as id_user FROM User WHERE id = {user_id}) as u ON a.user_id = u.id_user WHERE YEAR(a.start_date_time) = {year} AND a.transportation_mode = 'walk') as a on t.activity_id = a.id")
+        points = self.cursor.fetchall()
+        dist = 0
+        for i in range(0, len(points) - 1):
+            dist += haversine(points[i], points[i+1])
+        return dist
+
+
 if __name__ == '__main__':
     data = DBhandler()
 
@@ -116,6 +138,26 @@ if __name__ == '__main__':
     # Task 7 - Find all users that have never taken a taxi
     #print(tabulate(data.find_users_with_no_taxi()))
     #print("Number of users that has never registered the use of label taxi: ", data.find_users_with_no_taxi())
+
+    # Task 8 - Find all types of transportation modes and count how many distinct users that have used the different transportation modes. Do not count the rows where the transportation mode is null.
+    # print("Number of distinct users that have used the different transportation modes:")
+    # print(tabulate(data.count_users_per_transport_mode()))
+
+    # Task 9
+    # a) - Find the year and month with the most activities.
+    #print("The year and month with the most activities:")
+    #print(data.find_date_with_most_activities())
+    # b) - Which user had the most activities this year and month, and how many recorded hours do they have? Do they have more hours recorded than the user with the second most activities?
+    #print("The two users with the most activities that year and month:")
+    #print("user id, number of activities, hours recorded")
+    #print(tabulate(data.find_user_with_most_activities()))
+
+    # Task 10 - Find the total distance (in km) walked in 2008, by user with id=112.
+    print(data.find_distance_walked_in_year_by_user(2008, 112))
+
+    # Task 11 - Find the top 20 users who have gained the most altitude meters.
+
+    # Task 12 - Find all users who have invalid activities, and the number of invalid activities per user.
 
     # Close the db connection
     data.db_close_connection()
