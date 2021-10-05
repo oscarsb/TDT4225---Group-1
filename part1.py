@@ -2,6 +2,7 @@
 for connecting to MySQL server and
 inserting Geolife dataset. (Part 1)"""
 import os
+import time
 from pathlib import Path
 from tabulate import tabulate
 from decouple import config
@@ -103,12 +104,16 @@ class Datahandler:
                     continue
 
                 track_points = []
+
+                activity_count += 1  # inserting new activity, increase counter
+
                 # format each trackPoint and add all values to list
                 for line in track_raw:
                     formated = line.replace(",", " ").split()
                     # change date and time format to match datetime
                     formated[5] = f"{formated[5]} {formated[6]}"
                     formated.remove(formated[-1])  # remove time
+                    formated.append(activity_count)  # add activityID to list
 
                     track_points.append(formated)
 
@@ -126,10 +131,14 @@ class Datahandler:
                     transportationMode=transportation,
                     startDatetime=track_points[0][5],
                     endDatetime=track_points[-1][5])
-                activity_count += 1
+
+                # check if file is last file
+                last_file = False
+                if user == self.all_users[-1] and file == files[-1]:
+                    last_file = True
 
                 # add all trackpoints to db
-                self.handler.insert_trackpoints(activity_count, track_points)
+                self.handler.insert_trackpoints(track_points, last_file)
 
     def db_close_connection(self):
         self.handler.db_close_connection()
@@ -144,6 +153,9 @@ class DBhandler:
         self.connection = DbConnector()
         self.db_connection = self.connection.db_connection
         self.cursor = self.connection.cursor
+
+        self.trackpoints = []
+        self.trackpoint_treshold = 600000
 
     def drop_table(self, table_name):
         print("Dropping table %s..." % table_name)
@@ -252,42 +264,65 @@ class DBhandler:
         self.cursor.execute(query)
         self.db_connection.commit()
 
-    def insert_trackpoints(self, activityID, track_list):
-        """insert multiple trackpoints, with
-        id (foreign activity id)
-        tracklist (list on format: [lat, lon, 0, altitude, date_days, date_time)]
+    def __insert_trackpoints__(self):
+        """helper function for inserting all columns in list
         """
         query = """INSERT INTO TrackPoint(activity_id, lat, lon, altitude, date_time)
                     VALUES"""
 
         # insert all trackPoints into query
-        for i, track in enumerate(track_list):
-            value = f"""({activityID}, {track[0]},
+        for i, track in enumerate(self.trackpoints):
+            value = f"""({track[6]}, {track[0]},
                 {track[1]},{track[3]},'{track[5]}')"""
 
-            if i + 1 != len(track_list):
+            if i + 1 != len(self.trackpoints):
                 value = value + ","
 
             query = query + value
 
         # execute query
+        print("sending data..")
         self.cursor.execute(query)
-
         self.db_connection.commit()
+        print("sent data!")
+
+    def insert_trackpoints(self, track_list, final_data):
+        """insert multiple trackpoints into list, if list reaches treshold,
+        write it to database.
+        tracklist (list on format: [lat, lon, 0, altitude, date_days, date_time, activityID)]
+        """
+
+        # if trackpoint treshold is reached or this is final query, insert data
+        if len(self.trackpoints) + len(track_list) > self.trackpoint_treshold or final_data:
+            # calculate how much data to send
+            columns_to_add = self.trackpoint_treshold - len(self.trackpoints)
+            columns_left_over = len(track_list) - columns_to_add
+
+            self.trackpoints.extend(track_list[:columns_to_add])
+
+            # insert all trackPoints into query
+            self.__insert_trackpoints__()
+
+            # update trackpoint list to include left over trackpoints
+            self.trackpoints = track_list[columns_left_over:]
+        else:
+            self.trackpoints.extend(track_list)
 
     def db_close_connection(self):
         """Close the database connection"""
         if self.connection:
             self.connection.close_connection()
-    
+
+
 if __name__ == '__main__':
     """Insert all data in database
     OBS: drops existing tables!"""
     data = Datahandler()
-    # data = Datahandler()
-    #data.drop_tables()  # make sure db is clean
-    #data.create_tables()
-    #data.insert_users()
-    #data.insert_activities_and_trackpoints()
+    data.drop_tables()  # make sure db is clean
+    data.create_tables()
+    data.insert_users()
+    start = time.time()
+    data.insert_activities_and_trackpoints()
+    print(f"time: {time.time()-start}")
+    data.handler.show_tables()
     data.db_close_connection()
-    pass
