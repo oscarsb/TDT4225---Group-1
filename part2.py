@@ -1,3 +1,5 @@
+import datetime
+
 from tabulate import tabulate
 from DbConnector import DbConnector
 from haversine import haversine
@@ -90,6 +92,24 @@ class DBhandler:
         sorted_altitudes = dict(sorted(user_altitudes.items(), key=lambda item: item[1], reverse=True))
         return [(list(sorted_altitudes.keys())[i], list(sorted_altitudes.values())[i]) for i in range(0, 20)]
 
+    def find_all_users_with_invalid_activities(self): 
+        self.cursor.execute("SELECT a.user_id, start_date_time, end_date_time, activity_id FROM Activity as a JOIN TrackPoint as t ON a.id = t.activity_id")
+        user_dict = {}
+        this_activity = -1
+        user_trackpoints = self.cursor.fetchall()
+        for i in range(0, len(user_trackpoints)):
+            duration = user_trackpoints[i][1]-user_trackpoints[i-1][1]
+            if duration.total_seconds() >= 300 and user_trackpoints[i][3] != this_activity:
+                this_activity = user_trackpoints[i][3]
+                if user_trackpoints[i][0] in user_dict:
+                    user_dict[user_trackpoints[i][0]] += 1
+                else:
+                    user_dict[user_trackpoints[i][0]] = 1
+
+        headers = ["user_id", "Number of invalid activities"]
+        return (tabulate([k for k in user_dict.items()], headers = headers))
+        #print(user_dict)
+
 if __name__ == '__main__':
     data = DBhandler()
 
@@ -150,6 +170,7 @@ if __name__ == '__main__':
     #print(tabulate(data.find_20_users_with_most_altitude_gain()))
 
     # Task 12 - Find all users who have invalid activities, and the number of invalid activities per user.
+    print(data.find_all_users_with_invalid_activities())
     # TODO
 
     # Close the db connection
