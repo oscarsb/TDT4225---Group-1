@@ -24,52 +24,130 @@ class DBhandler:
         return self.cursor.fetchone()[0]
 
     def get_avg_activities_for_user(self):
-        self.cursor.execute("SELECT AVG(count) FROM (SELECT COUNT(a.id) as count FROM User as u LEFT OUTER JOIN Activity as a ON u.id = a.user_id GROUP BY u.id) as i")
+        self.cursor.execute("""SELECT AVG(count)
+                               FROM (
+                                   SELECT COUNT(a.id) as count 
+                                   FROM User as u 
+                                   LEFT OUTER JOIN Activity as a 
+                                   ON u.id = a.user_id 
+                                   GROUP BY u.id) as i""")
         return self.cursor.fetchone()[0]
 
     def get_max_activities_for_user(self):
-        self.cursor.execute("SELECT MAX(count) as max FROM (SELECT u.id as user, COUNT(a.user_id) as count FROM User as u LEFT OUTER JOIN Activity as a ON u.id = a.user_id GROUP BY u.id) as i")
+        self.cursor.execute("""SELECT MAX(count) as max 
+                               FROM (
+                                   SELECT u.id as user, COUNT(a.user_id) as count 
+                                   FROM User as u 
+                                   LEFT OUTER JOIN Activity as a 
+                                   ON u.id = a.user_id 
+                                   GROUP BY u.id) as i""")
         return self.cursor.fetchone()[0]
 
     def get_min_activities_for_user(self):
-        self.cursor.execute("SELECT MIN(count) as max FROM (SELECT u.id as user, COUNT(a.user_id) as count FROM User as u LEFT OUTER JOIN Activity as a ON u.id = a.user_id GROUP BY u.id) as i")
+        self.cursor.execute("""SELECT MIN(count) as max 
+                               FROM (
+                                   SELECT u.id as user, COUNT(a.user_id) as count 
+                                   FROM User as u 
+                                   LEFT OUTER JOIN Activity as a 
+                                   ON u.id = a.user_id 
+                                   GROUP BY u.id) as i""")
         return self.cursor.fetchone()[0]
 
     def get_top_10_users_with_most_activities(self):
-        self.cursor.execute("SELECT u.id as user, COUNT(a.user_id) as count FROM User as u JOIN Activity as a ON u.id = a.user_id GROUP BY u.id ORDER BY count DESC LIMIT 10")
+        self.cursor.execute("""SELECT u.id as user, COUNT(a.user_id) as count 
+                               FROM User as u 
+                               JOIN Activity as a 
+                               ON u.id = a.user_id 
+                               GROUP BY u.id 
+                               ORDER BY count 
+                               DESC 
+                               LIMIT 10""")
         return self.cursor.fetchall()
 
     def ended_activity_at_the_same_day(self):
-        self.cursor.execute("SELECT COUNT(*) FROM (SELECT user_id FROM Activity WHERE DAY(start_date_time) = DAY(end_date_time) GROUP BY user_id) as i")
+        self.cursor.execute("""SELECT COUNT(*) 
+                               FROM (
+                                   SELECT user_id 
+                                   FROM Activity 
+                                   WHERE DAY(start_date_time) = DAY(end_date_time) 
+                                   GROUP BY user_id) as i""")
         return self.cursor.fetchone()[0]
     
     def get_same_activities(self):
-        self.cursor.execute("SELECT user_id, transportation_mode, start_date_time, end_date_time, COUNT(*) FROM Activity GROUP BY user_id, transportation_mode, start_date_time, end_date_time HAVING COUNT(*) > 1")
+        self.cursor.execute("""SELECT user_id, transportation_mode, start_date_time, end_date_time, COUNT(*) 
+                               FROM Activity 
+                               GROUP BY user_id, transportation_mode, start_date_time, end_date_time 
+                               HAVING COUNT(*) > 1""")
         return self.cursor.fetchall()
 
     def get_number_of_close_users(self):
-        self.cursor.execute("SELECT id FROM User as u JOIN (SELECT a.user_id, t.lat, t.lon, t.altitude FROM Activity as a JOIN TrackPoint as t ON a.id = t.activity_id GROUP BY a.user_id, t.lat, t.lon, t.altitude) as i ON u.id = i.user_id")
+        self.cursor.execute("""SELECT id 
+                               FROM User as u 
+                               JOIN (
+                                   SELECT a.user_id, t.lat, t.lon, t.altitude 
+                                   FROM Activity as a 
+                                   JOIN TrackPoint as t 
+                                   ON a.id = t.activity_id 
+                                   GROUP BY a.user_id, t.lat, t.lon, t.altitude) as i 
+                                   ON u.id = i.user_id""")
         return self.cursor.fetchall()
 
     def find_users_with_no_taxi(self):
-        self.cursor.execute("SELECT u.id FROM User as u WHERE NOT EXISTS (SELECT a.id FROM Activity as a WHERE u.id = a.user_id AND a.transportation_mode = 'taxi')")
+        self.cursor.execute("""SELECT u.id 
+                               FROM User as u 
+                               WHERE NOT EXISTS (
+                                   SELECT a.id 
+                                   FROM Activity as a 
+                                   WHERE u.id = a.user_id 
+                                   AND a.transportation_mode = 'taxi')""")
         return self.cursor.fetchall()
         
     def count_users_per_transport_mode(self):
-        self.cursor.execute("SELECT a.transportation_mode, COUNT(DISTINCT(u.id)) FROM Activity as a JOIN User as u ON a.user_id = u.id WHERE NOT transportation_mode = 'NULL' GROUP BY a.transportation_mode")
+        self.cursor.execute("""SELECT a.transportation_mode, COUNT(DISTINCT(u.id)) 
+                               FROM Activity as a 
+                               JOIN User as u 
+                               ON a.user_id = u.id 
+                               WHERE NOT transportation_mode = 'NULL' 
+                               GROUP BY a.transportation_mode""")
         return self.cursor.fetchall()
 
     def find_date_with_most_activities(self):
-        self.cursor.execute("SELECT YEAR(start_date_time), MONTH(start_date_time) FROM Activity GROUP BY YEAR(start_date_time), MONTH(start_date_time) ORDER BY COUNT(id) DESC LIMIT 1")
+        self.cursor.execute("""SELECT YEAR(start_date_time), MONTH(start_date_time) 
+                               FROM Activity 
+                               GROUP BY YEAR(start_date_time), MONTH(start_date_time) 
+                               ORDER BY COUNT(id) 
+                               DESC 
+                               LIMIT 1""")
         return self.cursor.fetchone()
 
     def find_user_with_most_activities(self):
         year, month = self.find_date_with_most_activities()
-        self.cursor.execute(f"SELECT u.id, COUNT(a.id) as count, SUM(TIMESTAMPDIFF(HOUR, a.start_date_time, a.end_date_time)) FROM Activity as a JOIN User as u WHERE a.user_id = u.id AND YEAR(a.start_date_time) = {year} AND MONTH(a.start_date_time) = {month} GROUP BY u.id ORDER BY count DESC LIMIT 2")
+        self.cursor.execute(f"""SELECT u.id, COUNT(a.id) as count, SUM(TIMESTAMPDIFF(HOUR, a.start_date_time, a.end_date_time)) 
+                                FROM Activity as a 
+                                JOIN User as u 
+                                WHERE a.user_id = u.id 
+                                AND YEAR(a.start_date_time) = {year} 
+                                AND MONTH(a.start_date_time) = {month} 
+                                GROUP BY u.id 
+                                ORDER BY count 
+                                DESC 
+                                LIMIT 2""")
         return self.cursor.fetchall()
 
     def find_distance_walked_in_year_by_user(self, year, user_id):
-        self.cursor.execute(f"SELECT t.lat, t.lon FROM TrackPoint as t JOIN (SELECT * FROM Activity as a JOIN (SELECT id as id_user FROM User WHERE id = {user_id}) as u ON a.user_id = u.id_user WHERE YEAR(a.start_date_time) = {year} AND a.transportation_mode = 'walk') as a ON t.activity_id = a.id")
+        self.cursor.execute(f"""SELECT t.lat, t.lon 
+                                FROM TrackPoint as t 
+                                JOIN (
+                                    SELECT * 
+                                    FROM Activity as a 
+                                    JOIN (
+                                        SELECT id as id_user 
+                                        FROM User 
+                                        WHERE id = {user_id}) as u 
+                                        ON a.user_id = u.id_user 
+                                        WHERE YEAR(a.start_date_time) = {year} 
+                                        AND a.transportation_mode = 'walk') as a 
+                                        ON t.activity_id = a.id""")
         points = self.cursor.fetchall()
         dist = 0
         for i in range(1, len(points)):
@@ -78,11 +156,16 @@ class DBhandler:
 
     def find_20_users_with_most_altitude_gain(self):
         user_altitudes = {}
-        self.cursor.execute("SELECT User.id from User")
+        self.cursor.execute("""SELECT User.id 
+                               FROM User""")
         user_ids = self.cursor.fetchall()
         for uid in tqdm(user_ids, ncols=100, leave=False):
             gained = 0
-            self.cursor.execute(f"SELECT t.altitude FROM Activity as a JOIN TrackPoint as t ON t.activity_id = a.id WHERE a.user_id = {uid[0]}")
+            self.cursor.execute(f"""SELECT t.altitude 
+                                    FROM Activity as a 
+                                    JOIN TrackPoint as t 
+                                    ON t.activity_id = a.id 
+                                    WHERE a.user_id = {uid[0]}""")
             altitudes = self.cursor.fetchall()
             for i in range(1, len(altitudes)):
                 if altitudes[i][0] > altitudes[i-1][0]:
@@ -93,7 +176,10 @@ class DBhandler:
         return [(list(sorted_altitudes.keys())[i], list(sorted_altitudes.values())[i]) for i in range(0, 20)]
 
     def find_all_users_with_invalid_activities(self): 
-        self.cursor.execute("SELECT a.user_id, start_date_time, end_date_time, activity_id FROM Activity as a JOIN TrackPoint as t ON a.id = t.activity_id")
+        self.cursor.execute("""SELECT a.user_id, start_date_time, end_date_time, activity_id 
+                               FROM Activity as a 
+                               JOIN TrackPoint as t 
+                               ON a.id = t.activity_id""")
         user_dict = {}
         this_activity = -1
         user_trackpoints = self.cursor.fetchall()
