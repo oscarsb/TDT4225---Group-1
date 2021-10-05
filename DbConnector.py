@@ -33,7 +33,7 @@ class DbConnector:
         print("Connected to:", self.db_connection.get_server_info())
         # get database information
         self.cursor.execute("select database();")
-        database_name = self.cursor.fetchone()
+        database_name = self.cursor.fetchone()[0]
         print("You are connected to the database:", database_name)
         print("-----------------------------------------------\n")
 

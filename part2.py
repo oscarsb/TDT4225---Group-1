@@ -1,14 +1,7 @@
-"""Datahandler and DBhandler classes
-for connecting to MySQL server and
-inserting Geolife dataset. (Part 1)"""
-import os
-from pathlib import Path
 from tabulate import tabulate
-from decouple import config
 from DbConnector import DbConnector
-from haversine import haversine, Unit
-
-import constants
+from haversine import haversine
+from tqdm import tqdm
 
 class DBhandler:
     """Class for interacting
@@ -18,22 +11,6 @@ class DBhandler:
         self.connection = DbConnector()
         self.db_connection = self.connection.db_connection
         self.cursor = self.connection.cursor
-
-    def drop_table(self, table_name):
-        print("Dropping table %s..." % table_name)
-        query = """DROP TABLE IF EXISTS %s"""
-        self.cursor.execute(query % table_name)
-
-    def show_tables(self):
-        self.cursor.execute("SHOW TABLES")
-        rows = self.cursor.fetchall()
-        print(tabulate(rows, headers=self.cursor.column_names))
-
-    def print_table(self, table_name):
-        """Print all values of given table"""
-        self.cursor.execute(f"SELECT * FROM {table_name}")
-        rows = self.cursor.fetchall()
-        print(tabulate(rows, headers=self.cursor.column_names))
 
     def db_close_connection(self):
         """Close the database connection"""
@@ -57,11 +34,11 @@ class DBhandler:
         return self.cursor.fetchone()[0]
 
     def get_top_10_users_with_most_activities(self):
-        self.cursor.execute("SELECT u.id as user, COUNT(a.user_id) as count FROM User as u LEFT OUTER JOIN Activity as a ON u.id = a.user_id GROUP BY u.id ORDER BY count DESC LIMIT 10")
+        self.cursor.execute("SELECT u.id as user, COUNT(a.user_id) as count FROM User as u JOIN Activity as a ON u.id = a.user_id GROUP BY u.id ORDER BY count DESC LIMIT 10")
         return self.cursor.fetchall()
 
     def ended_activity_at_the_same_day(self):
-        self.cursor.execute("SELECT COUNT(*) FROM (SELECT user_id FROM Activity WHERE SUBSTRING_INDEX(start_date_time, ' ', 1) = SUBSTRING_INDEX(end_date_time, ' ', 1) GROUP BY user_id) as i")
+        self.cursor.execute("SELECT COUNT(*) FROM (SELECT user_id FROM Activity WHERE DAY(start_date_time) = DAY(end_date_time) GROUP BY user_id) as i")
         return self.cursor.fetchone()[0]
     
     def get_same_activities(self):
@@ -73,33 +50,47 @@ class DBhandler:
         return self.cursor.fetchall()
 
     def find_users_with_no_taxi(self):
-        self.cursor.execute("SELECT COUNT(*) FROM User WHERE has_labels = 'FALSE'")
-        num_no_label = self.cursor.fetchone()[0]
-        self.cursor.execute("SELECT COUNT(*) FROM (SELECT DISTINCT i.id, i.transportation_mode FROM (SELECT u.id, a.transportation_mode FROM User as u JOIN Activity as a ON u.id = a.user_id) as i WHERE NOT i.transportation_mode = 'NULL') as ii WHERE ii.transportation_mode = 'taxi'")
-        num_has_label_but_never_taken_taxi = self.cursor.fetchone()[0]
-        return num_no_label+num_has_label_but_never_taken_taxi
+        self.cursor.execute("SELECT u.id FROM User as u WHERE NOT EXISTS (SELECT a.id FROM Activity as a WHERE u.id = a.user_id AND a.transportation_mode = 'taxi')")
+        return self.cursor.fetchall()
         
     def count_users_per_transport_mode(self):
         self.cursor.execute("SELECT a.transportation_mode, COUNT(DISTINCT(u.id)) FROM Activity as a JOIN User as u ON a.user_id = u.id WHERE NOT transportation_mode = 'NULL' GROUP BY a.transportation_mode")
         return self.cursor.fetchall()
 
     def find_date_with_most_activities(self):
-        self.cursor.execute("SELECT YEAR(start_date_time), MONTH(start_date_time) FROM Activity GROUP BY YEAR(start_date_time), MONTH(start_date_time) ORDER by COUNT(id) DESC LIMIT 1")
+        self.cursor.execute("SELECT YEAR(start_date_time), MONTH(start_date_time) FROM Activity GROUP BY YEAR(start_date_time), MONTH(start_date_time) ORDER BY COUNT(id) DESC LIMIT 1")
         return self.cursor.fetchone()
 
     def find_user_with_most_activities(self):
         year, month = self.find_date_with_most_activities()
-        self.cursor.execute(f"SELECT u.id, COUNT(a.id), SUM(TIMESTAMPDIFF(HOUR, a.start_date_time, a.end_date_time)) FROM Activity as a JOIN User as u WHERE a.user_id = u.id AND YEAR(a.start_date_time) = {year} AND MONTH(a.start_date_time) = {month} GROUP BY u.id ORDER BY COUNT(a.id) DESC LIMIT 2")
+        self.cursor.execute(f"SELECT u.id, COUNT(a.id) as count, SUM(TIMESTAMPDIFF(HOUR, a.start_date_time, a.end_date_time)) FROM Activity as a JOIN User as u WHERE a.user_id = u.id AND YEAR(a.start_date_time) = {year} AND MONTH(a.start_date_time) = {month} GROUP BY u.id ORDER BY count DESC LIMIT 2")
         return self.cursor.fetchall()
 
     def find_distance_walked_in_year_by_user(self, year, user_id):
-        self.cursor.execute(f"SELECT t.lat, t.lon FROM TrackPoint as t INNER JOIN (SELECT * FROM Activity as a INNER JOIN (SELECT id as id_user FROM User WHERE id = {user_id}) as u ON a.user_id = u.id_user WHERE YEAR(a.start_date_time) = {year} AND a.transportation_mode = 'walk') as a on t.activity_id = a.id")
+        self.cursor.execute(f"SELECT t.lat, t.lon FROM TrackPoint as t JOIN (SELECT * FROM Activity as a JOIN (SELECT id as id_user FROM User WHERE id = {user_id}) as u ON a.user_id = u.id_user WHERE YEAR(a.start_date_time) = {year} AND a.transportation_mode = 'walk') as a ON t.activity_id = a.id")
         points = self.cursor.fetchall()
         dist = 0
-        for i in range(0, len(points) - 1):
-            dist += haversine(points[i], points[i+1])
+        for i in range(1, len(points)):
+            dist += haversine(points[i], points[i-1])
         return dist
 
+    def find_20_users_with_most_altitude_gain(self):
+        user_altitudes = {}
+        self.cursor.execute("SELECT User.id from User")
+        user_ids = self.cursor.fetchall()
+        for uid in tqdm(user_ids, ncols=100, leave=False):
+            gained = 0
+            self.cursor.execute(f"SELECT t.altitude FROM Activity as a JOIN TrackPoint as t ON t.activity_id = a.id WHERE a.user_id = {uid[0]}")
+            altitudes = self.cursor.fetchall()
+            for i in range(1, len(altitudes)):
+                if altitudes[i][0] < 0 or altitudes[i][0] > 8000*3.5:
+                    print(altitudes[i][0])
+                if altitudes[i][0] > altitudes[i-1][0]:
+                    gained += altitudes[i][0] - altitudes[i-1][0]
+            user_altitudes[uid[0]] = round(gained*0.3048)
+
+        sorted_altitudes = dict(sorted(user_altitudes.items(), key=lambda item: item[1], reverse=True))
+        return [(list(sorted_altitudes.keys())[i], list(sorted_altitudes.values())[i]) for i in range(0, 20)]
 
 if __name__ == '__main__':
     data = DBhandler()
@@ -132,16 +123,16 @@ if __name__ == '__main__':
     # This query does not return anything because there are no duplicate activities in the DB, but it is tested for by inserting a duplicate. The result is shown above
 
     # Task 6 - Find the number of users which have been close to each other in time and space (Covid-19 tracking). Close is defined as the same minute (60 seconds) and space (100 meters).
+    # TODO
     #print(tabulate(data.get_number_of_close_users()))
-    #-------------------NOT DONE!!!-----------------
 
     # Task 7 - Find all users that have never taken a taxi
+    #print("Users that have never taken a taxi:")
     #print(tabulate(data.find_users_with_no_taxi()))
-    #print("Number of users that has never registered the use of label taxi: ", data.find_users_with_no_taxi())
 
     # Task 8 - Find all types of transportation modes and count how many distinct users that have used the different transportation modes. Do not count the rows where the transportation mode is null.
-    # print("Number of distinct users that have used the different transportation modes:")
-    # print(tabulate(data.count_users_per_transport_mode()))
+    #print("Number of distinct users that have used the different transportation modes:")
+    #print(tabulate(data.count_users_per_transport_mode()))
 
     # Task 9
     # a) - Find the year and month with the most activities.
@@ -153,18 +144,15 @@ if __name__ == '__main__':
     #print(tabulate(data.find_user_with_most_activities()))
 
     # Task 10 - Find the total distance (in km) walked in 2008, by user with id=112.
-    print(data.find_distance_walked_in_year_by_user(2008, 112))
+    #print(data.find_distance_walked_in_year_by_user(2008, 112))
 
     # Task 11 - Find the top 20 users who have gained the most altitude meters.
+    # TODO: find out what is meant by "Remember that some altitude-values are invalid"
+    #print("Top 20 users who have gained the most altitude meters:")
+    #print(tabulate(data.find_20_users_with_most_altitude_gain()))
 
     # Task 12 - Find all users who have invalid activities, and the number of invalid activities per user.
+    # TODO
 
     # Close the db connection
     data.db_close_connection()
-
-    # data = Datahandler()
-    # data.drop_tables()  # make sure db is clean
-    # data.create_tables()
-    # data.insert_users()
-    # data.insert_activities_and_trackpoints()
-    # data.db_close_connection()
