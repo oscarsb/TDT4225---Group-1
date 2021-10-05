@@ -83,8 +83,6 @@ class DBhandler:
             self.cursor.execute(f"SELECT t.altitude FROM Activity as a JOIN TrackPoint as t ON t.activity_id = a.id WHERE a.user_id = {uid[0]}")
             altitudes = self.cursor.fetchall()
             for i in range(1, len(altitudes)):
-                if altitudes[i][0] < 0 or altitudes[i][0] > 8000*3.5:
-                    print(altitudes[i][0])
                 if altitudes[i][0] > altitudes[i-1][0]:
                     gained += altitudes[i][0] - altitudes[i-1][0]
             user_altitudes[uid[0]] = round(gained*0.3048)
