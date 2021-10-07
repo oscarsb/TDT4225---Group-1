@@ -99,7 +99,7 @@ class DBhandler:
                                ON u.id = a.user_id 
                                JOIN TrackPoint as t 
                                ON a.id = t.activity_id""")
-        user_positions = self.cursor.fetchall()[100000:]
+        user_positions = self.cursor.fetchall()
         close_users = set([])
         change_user_indeces = []
 
@@ -115,7 +115,6 @@ class DBhandler:
                 user2 = user2_pos[0]
                 if within60s(user1_pos, user2_pos) and within100m(user1_pos, user2_pos):
                     close_users.update([user1, user2])
-                    print(user1, user2)
         
         return len(close_users)
 
