@@ -1,8 +1,7 @@
-import datetime
-
+import math
 from tabulate import tabulate
 from DbConnector import DbConnector
-from haversine import haversine
+from haversine import haversine, Unit
 from tqdm import tqdm
 
 class DBhandler:
@@ -82,16 +81,44 @@ class DBhandler:
         return self.cursor.fetchall()
 
     def get_number_of_close_users(self):
-        self.cursor.execute("""SELECT id 
+
+        def within60s(user1_pos, user2_pos):
+            start_time1, end_time1 = user1_pos[1], user1_pos[2]
+            start_time2, end_time2 = user2_pos[1], user2_pos[2]
+            return -60 < (start_time1 - end_time2).seconds < 60 or -60 < (start_time2 - end_time1).seconds < 60
+
+        def within100m(user1_pos, user2_pos):
+            lat1, lon1, altitude1 = user1_pos[3], user1_pos[4], user1_pos[5]
+            lat2, lon2, altitude2 = user2_pos[3], user2_pos[4], user2_pos[5]
+            flat_distance = haversine((lat1, lon1), (lat2, lon2), unit=Unit.METERS)
+            euclidian_distance = math.sqrt(flat_distance**2 + (altitude2 - altitude1)**2)
+            return euclidian_distance < 100
+
+        self.cursor.execute("""SELECT u.id, a.start_date_time, a.end_date_time, t.lat, t.lon, t.altitude 
                                FROM User as u 
-                               JOIN (
-                                   SELECT a.user_id, t.lat, t.lon, t.altitude 
-                                   FROM Activity as a 
-                                   JOIN TrackPoint as t 
-                                   ON a.id = t.activity_id 
-                                   GROUP BY a.user_id, t.lat, t.lon, t.altitude) as i 
-                                   ON u.id = i.user_id""")
-        return self.cursor.fetchall()
+                               JOIN Activity as a 
+                               ON u.id = a.user_id 
+                               JOIN TrackPoint as t 
+                               ON a.id = t.activity_id""")
+        user_positions = self.cursor.fetchall()[100000:]
+        close_users = set([])
+        change_user_indeces = []
+
+        for i in range(1, len(user_positions)):
+            if user_positions[i][0] != user_positions[i-1][0]:
+                change_user_indeces.append(i)
+
+        for i in tqdm(range(len(user_positions)), ncols=100, leave=False):
+            user1_pos = user_positions[i]
+            user1 = user1_pos[0]
+            next_user_index = change_user_indeces[int(user1)]
+            for user2_pos in user_positions[next_user_index:]:
+                user2 = user2_pos[0]
+                if within60s(user1_pos, user2_pos) and within100m(user1_pos, user2_pos):
+                    close_users.update([user1, user2])
+                    print(user1, user2)
+        
+        return len(close_users)
 
     def find_users_with_no_taxi(self):
         self.cursor.execute("""SELECT u.id 
@@ -195,7 +222,6 @@ class DBhandler:
 
         headers = ["user_id", "Number of invalid activities"]
         return (tabulate([k for k in user_dict.items()], headers = headers))
-        #print(user_dict)
 
     def show_tables(self):
         self.cursor.execute("SHOW TABLES")
@@ -241,8 +267,8 @@ if __name__ == '__main__':
     # This query does not return anything because there are no duplicate activities in the DB, but it is tested for by inserting a duplicate. The result is shown above
 
     # Task 6 - Find the number of users which have been close to each other in time and space (Covid-19 tracking). Close is defined as the same minute (60 seconds) and space (100 meters).
-    # TODO
-    #print(tabulate(data.get_number_of_close_users()))
+    #print("The number of users which have been close to each other:")
+    #print(data.get_number_of_close_users())
 
     # Task 7 - Find all users that have never taken a taxi
     #print("Users that have never taken a taxi:")
@@ -270,8 +296,7 @@ if __name__ == '__main__':
     #print(tabulate(data.find_20_users_with_most_altitude_gain()))
 
     # Task 12 - Find all users who have invalid activities, and the number of invalid activities per user.
-    print(data.find_all_users_with_invalid_activities())
-    # TODO
+    #print(data.find_all_users_with_invalid_activities())
 
     # Close the db connection
     data.db_close_connection()
