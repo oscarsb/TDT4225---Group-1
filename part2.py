@@ -64,13 +64,14 @@ class DBhandler:
                                LIMIT 10""")
         return self.cursor.fetchall()
 
-    def ended_activity_at_the_same_day(self):
+    def ended_activity_at_the_next_day(self):
         self.cursor.execute("""SELECT COUNT(*) 
                                FROM (
                                    SELECT user_id 
                                    FROM Activity 
-                                   WHERE DAY(start_date_time) = DAY(end_date_time) 
+                                   WHERE DATEDIFF(start_date_time, end_date_time) = -1
                                    GROUP BY user_id) as i""")
+
         return self.cursor.fetchone()[0]
     
     def get_same_activities(self):
@@ -196,6 +197,18 @@ class DBhandler:
         return (tabulate([k for k in user_dict.items()], headers = headers))
         #print(user_dict)
 
+    def show_tables(self):
+        self.cursor.execute("SHOW TABLES")
+        rows = self.cursor.fetchall()
+        print(tabulate(rows, headers=self.cursor.column_names))
+
+
+    def drop_table(self, table_name):
+        print("Dropping table %s..." % table_name)
+        query = """DROP TABLE IF EXISTS %s"""
+        self.cursor.execute(query % table_name)
+
+
 if __name__ == '__main__':
     data = DBhandler()
 
@@ -205,17 +218,18 @@ if __name__ == '__main__':
     #print("Number of trackpoints: ", data.get_num("TrackPoint"))
 
     # Task 2 - Find the average, minimum and maximum number of activities per user
-    #avg_activity_for_all_users = data.get_avg_activities_for_user()
+    avg_activity_for_all_users = data.get_avg_activities_for_user()
     #print("Avrage activities for all users: ", avg_activity_for_all_users, "≈", round(avg_activity_for_all_users, 1))
     #print("Maximum number of activities: ", data.get_max_activities_for_user())
     #print("Minimum number of activities: ", data.get_min_activities_for_user())
 
     # Task 3 - Find the top 10 users with the highest number of activities
     #print("TOP 10 users with the highest number of activities:")
-    #print(tabulate(data.get_top_10_users_with_most_activities()))
+    #headers = ["user_id", "Number of activities"]
+    #print(tabulate(data.get_top_10_users_with_most_activities(), headers=headers))
 
     # Task 4 - Find the number of users that have started the activity in one day and ended the activity the next day
-    #print("number of users that have an activity that ended the same day as it started: ", data.ended_activity_at_the_same_day())
+    #print("number of users that have an activity that ended the day after it started: ", data.ended_activity_at_the_next_day())
 
     # Task 5 - Find activities that are registered multiple times. You should find the query even if you get zero results
     #print(tabulate(data.get_same_activities()))
@@ -232,7 +246,7 @@ if __name__ == '__main__':
 
     # Task 7 - Find all users that have never taken a taxi
     #print("Users that have never taken a taxi:")
-    #print(tabulate(data.find_users_with_no_taxi()))
+    #print(data.find_users_with_no_taxi())
 
     # Task 8 - Find all types of transportation modes and count how many distinct users that have used the different transportation modes. Do not count the rows where the transportation mode is null.
     #print("Number of distinct users that have used the different transportation modes:")
