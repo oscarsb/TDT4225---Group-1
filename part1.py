@@ -14,7 +14,6 @@ class Datahandler:
     """Class for parsing Geolife data"""
 
     def __init__(self):
-        self.handler = DBhandler()
         self.datapath = Path(constants.DATA_PATH)
         self.userpath = Path(str(self.datapath) + r"\Data")
         self.all_users = os.listdir(self.userpath)  # all users in dataset
@@ -22,33 +21,7 @@ class Datahandler:
         with open(Path(str(self.datapath) + r"\labeled_ids.txt"), 'r') as f:
             self.labeled_users = f.read().splitlines()  # all users with labels
 
-        self.tables = ["TrackPoint", "Activity", "User"]
-
-    def create_tables(self):
-        """Creates User, Activity and TrackPoint tables"""
-        self.handler.create_user_table()
-        self.handler.create_activity_table()
-        self.handler.create_trackpoint_table()
-
-    def drop_tables(self):
-        """Drop all tables"""
-        for table in self.tables:
-            self.handler.drop_table(table)
-
-    def insert_users(self):
-        """Insert all user into User table,
-        assumes User table exists"""
-
-        all_users = self.all_users.copy()  # create tmp which can be modified
-
-        # insert all users with labels
-        for user in self.labeled_users:
-            all_users.remove(user)
-            self.handler.insert_user(user, "TRUE")
-
-        # insert users without labels
-        for user in all_users:
-            self.handler.insert_user(user, "FALSE")
+        self.counter = 0
 
     def _format_labels(self, user, user_dir):
         """Read label file and format data"""
@@ -85,6 +58,7 @@ class Datahandler:
         activity_count = 0  # activity count to keep track of activity id
 
         for user in self.all_users:
+            print(user)
             # data directory of given user
             user_dir = Path(str(self.userpath) + rf"\{user}")
 
@@ -120,20 +94,8 @@ class Datahandler:
                         transportation = label[2]
                         break
 
-                # add activity
-                self.handler.insert_activity(
-                    name=user,
-                    transportationMode=transportation,
-                    startDatetime=track_points[0][5],
-                    endDatetime=track_points[-1][5])
-                activity_count += 1
-
-                # add all trackpoints to db
-                self.handler.insert_trackpoints(activity_count, track_points)
-
-    def db_close_connection(self):
-        self.handler.db_close_connection()
-        print("Database connection closed..")
+                # self.handler.insert_trackpoints(activity_count, track_points)
+                self.counter += len(track_points)
 
 
 class DBhandler:
@@ -144,6 +106,8 @@ class DBhandler:
         self.connection = DbConnector()
         self.db_connection = self.connection.db_connection
         self.cursor = self.connection.cursor
+
+        self.counter = 0
 
     def drop_table(self, table_name):
         print("Dropping table %s..." % table_name)
@@ -261,33 +225,32 @@ class DBhandler:
                     VALUES"""
 
         # insert all trackPoints into query
-        for i, track in enumerate(track_list):
-            value = f"""({activityID}, {track[0]},
-                {track[1]},{track[3]},'{track[5]}')"""
+        # for i, track in enumerate(track_list):
+        #     value = f"""({activityID}, {track[0]},
+        #         {track[1]},{track[3]},'{track[5]}')"""
 
-            if i + 1 != len(track_list):
-                value = value + ","
+        #     if i + 1 != len(track_list):
+        #         value = value + ","
 
-            query = query + value
+        #     query = query + value
+        self.counter += len(track_list)
+        # # execute query
+        # self.cursor.execute(query)
 
-        # execute query
-        self.cursor.execute(query)
-
-        self.db_connection.commit()
+        # self.db_connection.commit()
 
     def db_close_connection(self):
         """Close the database connection"""
         if self.connection:
             self.connection.close_connection()
-    
+
+
 if __name__ == '__main__':
     """Insert all data in database
     OBS: drops existing tables!"""
     data = Datahandler()
-    # data = Datahandler()
-    #data.drop_tables()  # make sure db is clean
-    #data.create_tables()
-    #data.insert_users()
-    #data.insert_activities_and_trackpoints()
-    data.db_close_connection()
-    pass
+    # data.drop_tables()  # make sure db is clean
+    # data.create_tables()
+    # data.insert_users()
+    data.insert_activities_and_trackpoints()
+    print(data.counter)
