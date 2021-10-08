@@ -99,7 +99,7 @@ class DBhandler:
                                JOIN Activity as a 
                                ON u.id = a.user_id 
                                JOIN TrackPoint as t 
-                               ON a.id = t.activity_id""")
+                               ON a.id = t.activity_id ORDER BY u.id""")
         user_positions = self.cursor.fetchall()
         close_users = set([])
         change_user_indeces = []
@@ -167,14 +167,10 @@ class DBhandler:
                                 JOIN (
                                     SELECT * 
                                     FROM Activity as a 
-                                    JOIN (
-                                        SELECT id as id_user 
-                                        FROM User 
-                                        WHERE id = {user_id}) as u 
-                                        ON a.user_id = u.id_user 
-                                        WHERE YEAR(a.start_date_time) = {year} 
-                                        AND a.transportation_mode = 'walk') as a 
-                                        ON t.activity_id = a.id""")
+                                    WHERE a.user_id = {user_id} 
+                                    AND YEAR(a.start_date_time) = {year} 
+                                    AND a.transportation_mode = 'walk') as a 
+                                ON t.activity_id = a.id""")
         points = self.cursor.fetchall()
         dist = 0
         for i in range(1, len(points)):
@@ -222,42 +218,31 @@ class DBhandler:
         headers = ["user_id", "Number of invalid activities"]
         return (tabulate([k for k in user_dict.items()], headers = headers))
 
-    def show_tables(self):
-        self.cursor.execute("SHOW TABLES")
-        rows = self.cursor.fetchall()
-        print(tabulate(rows, headers=self.cursor.column_names))
-
-
-    def drop_table(self, table_name):
-        print("Dropping table %s..." % table_name)
-        query = """DROP TABLE IF EXISTS %s"""
-        self.cursor.execute(query % table_name)
-
 
 if __name__ == '__main__':
     data = DBhandler()
 
     # Task 1 - How many users, activities and trackpoints are there in the dataset
-    #print("Number of users: ", data.get_num("User"))
-    #print("Number of activities: ", data.get_num("Activity"))
-    #print("Number of trackpoints: ", data.get_num("TrackPoint"))
+    print("Number of users: ", data.get_num("User"))
+    print("Number of activities: ", data.get_num("Activity"))
+    print("Number of trackpoints: ", data.get_num("TrackPoint"))
 
     # Task 2 - Find the average, minimum and maximum number of activities per user
     avg_activity_for_all_users = data.get_avg_activities_for_user()
-    #print("Avrage activities for all users: ", avg_activity_for_all_users, "≈", round(avg_activity_for_all_users, 1))
-    #print("Maximum number of activities: ", data.get_max_activities_for_user())
-    #print("Minimum number of activities: ", data.get_min_activities_for_user())
+    print("Avrage activities for all users: ", avg_activity_for_all_users, "≈", round(avg_activity_for_all_users, 1))
+    print("Maximum number of activities: ", data.get_max_activities_for_user())
+    print("Minimum number of activities: ", data.get_min_activities_for_user())
 
     # Task 3 - Find the top 10 users with the highest number of activities
-    #print("TOP 10 users with the highest number of activities:")
-    #headers = ["user_id", "Number of activities"]
-    #print(tabulate(data.get_top_10_users_with_most_activities(), headers=headers))
+    print("TOP 10 users with the highest number of activities:")
+    headers = ["user_id", "Number of activities"]
+    print(tabulate(data.get_top_10_users_with_most_activities(), headers=headers))
 
     # Task 4 - Find the number of users that have started the activity in one day and ended the activity the next day
-    #print("number of users that have an activity that ended the day after it started: ", data.ended_activity_at_the_next_day())
+    print("number of users that have an activity that ended the day after it started: ", data.ended_activity_at_the_next_day())
 
     # Task 5 - Find activities that are registered multiple times. You should find the query even if you get zero results
-    #print(tabulate(data.get_same_activities()))
+    print(tabulate(data.get_same_activities()))
     # Prints the activities in this format (user_id, transportation_mode, start_date_time, end_date_time, count) count is how many duplicates there are of this activity
     # ---  -------------------  -------------------  -
     # 181  2008-03-14 02:57:55  2008-03-14 03:43:40  2 
@@ -266,36 +251,37 @@ if __name__ == '__main__':
     # This query does not return anything because there are no duplicate activities in the DB, but it is tested for by inserting a duplicate. The result is shown above
 
     # Task 6 - Find the number of users which have been close to each other in time and space (Covid-19 tracking). Close is defined as the same minute (60 seconds) and space (100 meters).
-    #print("The number of users which have been close to each other:")
-    #print(data.get_number_of_close_users())
+    print("The number of users which have been close to each other:")
+    print(data.get_number_of_close_users())
 
     # Task 7 - Find all users that have never taken a taxi
-    #print("Users that have never taken a taxi:")
-    #print(data.find_users_with_no_taxi())
+    print("Users that have never taken a taxi:")
+    print(data.find_users_with_no_taxi())
 
     # Task 8 - Find all types of transportation modes and count how many distinct users that have used the different transportation modes. Do not count the rows where the transportation mode is null.
-    #print("Number of distinct users that have used the different transportation modes:")
-    #print(tabulate(data.count_users_per_transport_mode()))
+    print("Number of distinct users that have used the different transportation modes:")
+    print(tabulate(data.count_users_per_transport_mode()))
 
     # Task 9
     # a) - Find the year and month with the most activities.
-    #print("The year and month with the most activities:")
-    #print(data.find_date_with_most_activities())
+    print("The year and month with the most activities:")
+    print(data.find_date_with_most_activities())
     # b) - Which user had the most activities this year and month, and how many recorded hours do they have? Do they have more hours recorded than the user with the second most activities?
-    #print("The two users with the most activities that year and month:")
-    #print("user id, number of activities, hours recorded")
-    #print(tabulate(data.find_user_with_most_activities()))
+    print("The two users with the most activities that year and month:")
+    headers = ["user id", "number of activities", "hours recorded"]
+    print(tabulate(data.find_user_with_most_activities(), headers=headers))
 
     # Task 10 - Find the total distance (in km) walked in 2008, by user with id=112.
-    #print(data.find_distance_walked_in_year_by_user(2008, 112))
+    print("Total distance walked by user 112 in 2008:")
+    print(data.find_distance_walked_in_year_by_user(2008, 112), "km")
 
     # Task 11 - Find the top 20 users who have gained the most altitude meters.
-    # TODO: find out what is meant by "Remember that some altitude-values are invalid"
-    #print("Top 20 users who have gained the most altitude meters:")
-    #print(tabulate(data.find_20_users_with_most_altitude_gain()))
+    print("Top 20 users who have gained the most altitude meters:")
+    print(tabulate(data.find_20_users_with_most_altitude_gain()))
 
     # Task 12 - Find all users who have invalid activities, and the number of invalid activities per user.
-    #print(data.find_all_users_with_invalid_activities())
+    print("Users with invalid activities: ")
+    print(data.find_all_users_with_invalid_activities())
 
     # Close the db connection
     data.db_close_connection()
